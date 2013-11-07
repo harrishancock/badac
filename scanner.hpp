@@ -42,8 +42,7 @@ public:
         unrecognized_input_error,
         eof = 0,
         identifier,
-        numeric,
-        boolean,
+        literal,
         string,
         procedure,
         is,
@@ -88,6 +87,8 @@ public:
     void push_char (char c) { m_lexeme += c; }
     void set_lineno (int lineno) { m_lineno = lineno; }
     void set_token_id (token_id id) { m_token_id = id; }
+
+    int lineno () const { return m_lineno; }
 
     token_id get_token_id () const { return m_token_id; }
 

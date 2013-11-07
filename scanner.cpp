@@ -32,8 +32,7 @@ const char* token::token_id_to_string (token_id elem) {
         ENUMITEM(unrecognized_input_error)
         ENUMITEM(eof)
         ENUMITEM(identifier)
-        ENUMITEM(numeric)
-        ENUMITEM(boolean)
+        ENUMITEM(literal)
         ENUMITEM(string)
         ENUMITEM(procedure)
         ENUMITEM(is)
@@ -64,8 +63,8 @@ const char* token::token_id_to_string (token_id elem) {
 }
 
 const std::map<std::string, token::token_id, ciless> token::s_keyword_to_token_id {
-    { "true", boolean },
-    { "false", boolean },
+    { "true", literal },
+    { "false", literal },
     { "procedure", procedure },
     { "is", is },
     { "declare", declare },
@@ -112,7 +111,7 @@ std::istream& scanner::operator() (std::istream& input, token& tok) {
         handle_alpha(input, tok, '_' == c);
     }
     else if ('.' == c || isdigit(c)) {
-        tok = token(token::numeric, m_current_line, c);
+        tok = token(token::literal, m_current_line, c);
         handle_digit(input, tok, '.' == c);
     }
     else {

@@ -1,3 +1,15 @@
+/*
+ * California State University East Bay
+ * CS4110 - Compiler Design
+ * Author: Harris Hancock (hhancock 'at' horizon)
+ *
+ * Baby Ada Compiler Assignment (7 November 2013)
+ *
+ * parser.hpp
+ *
+ * Declaration of the parser class.
+ */
+
 #ifndef PARSER_HPP
 #define PARSER_HPP
 
@@ -7,17 +19,38 @@
 
 using first_set = std::set<token::token_id>;
 
+/* The parser requires some state (an input stream, a scanner, and a current
+ * token), which would normally necessitate either global variables or
+ * "threading" the state as arguments through the recursive descent routines.
+ * I don't particularly like either of those approaches, so I made the parser
+ * an object instead: the constructor sets up the state, then performs the
+ * parse--a parser object is therefore a single-use object which performs a
+ * computation once. Since we're not building parse trees yet, there is no
+ * "return value", but this can be provided for later by including a
+ * get_parse_tree() const accessor function. The parser object can later be
+ * wrapped by a free function, say called parse(), that would look sort of
+ * like this:
+ *
+ *      parse_tree parse (std::istream& input) {
+ *          parser p (input, scanner());
+ *          return p.get_parse_tree();
+ *      }
+ *
+ * Such a free function isn't necessary; it would just hide some of the oddity
+ * of using a constructor to perform a computation. */
 class parser {
 public:
     parser (std::istream& input, scanner gettoken)
             : m_gettoken(gettoken)
             , m_input(input) {
+        /* Perform the actual parse. */
         m_gettoken(m_input, m_token);
         program();
         match(token::eof);
     }
 
 private:
+    /* Baby Ada nonterminals. */
     void program ();
     void stats ();
     void decls ();
@@ -41,6 +74,8 @@ private:
     void factor ();
     void idnonterm ();
 
+    /* match and predict are the two primary operations the parser uses to
+     * work its way through the token stream. */
     void match (const token::token_id);
     bool predict (const token::token_id) const;
     bool predict (const first_set&) const;
