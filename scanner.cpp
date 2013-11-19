@@ -9,6 +9,7 @@
  */
 
 #include "scanner.hpp"
+#include "bada.hpp"
 
 namespace {
 
@@ -62,29 +63,29 @@ const char* token::token_id_to_string (token_id elem) {
     }
 }
 
-const std::map<std::string, token::token_id, ciless> token::s_keyword_to_token_id {
-    { "true", literal },
-    { "false", literal },
-    { "procedure", procedure },
-    { "is", is },
-    { "declare", declare },
-    { "constant", constant },
-    { "integer", type },
-    { "real", type },
-    { "boolean", type },
-    { "or", addop },
-    { "mod", mulop },
-    { "and", mulop },
-    { "not", not_ },
-    { "if", if_ },
-    { "then", then },
-    { "while", while_ },
-    { "put", write },
-    { "put_line", write },
-    { "get", read },
-    { "begin", begin },
-    { "end", end },
-    { "loop", loop }
+const std::map<ci_string, token::token_id> token::s_keyword_to_token_id {
+    { KWD_TRUE, literal },
+    { KWD_FALSE, literal },
+    { KWD_PROCEDURE, procedure },
+    { KWD_IS, is },
+    { KWD_DECLARE, declare },
+    { KWD_CONSTANT, constant },
+    { KWD_INTEGER, type },
+    { KWD_REAL, type },
+    { KWD_BOOLEAN, type },
+    { KWD_OR, addop },
+    { KWD_MOD, mulop },
+    { KWD_AND, mulop },
+    { KWD_NOT, not_ },
+    { KWD_IF, if_ },
+    { KWD_THEN, then },
+    { KWD_WHILE, while_ },
+    { KWD_PUT, write },
+    { KWD_PUT_LINE, write },
+    { KWD_GET, read },
+    { KWD_BEGIN, begin },
+    { KWD_END, end },
+    { KWD_LOOP, loop }
 };
 
 //////////////////////////////////////////////////////////////////////////////

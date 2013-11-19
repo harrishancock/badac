@@ -13,6 +13,7 @@
 #ifndef PARSER_HPP
 #define PARSER_HPP
 
+#include "scoped_symbol_table.hpp"
 #include "scanner.hpp"
 
 #include <set>
@@ -49,13 +50,22 @@ public:
         match(token::eof);
     }
 
+    /* Dump the current state of the symbol table to the given output stream. */
+    void display_symbol_table (std::ostream& output) {
+        m_symtab.display(output);
+    }
+
+    /* Indicate whether or not the program passed semantic checking during the
+     * parse. */
+    bool good () const { return m_good; }
+
 private:
     /* Baby Ada nonterminals. */
     void program ();
     void stats ();
     void decls ();
     void decl ();
-    void rest ();
+    void rest (const token& declared_id);
     void statmt ();
     void assignstat ();
     void ifstat ();
@@ -80,9 +90,25 @@ private:
     bool predict (const token::token_id) const;
     bool predict (const first_set&) const;
 
+    /* Add a data object (variable) to the symbol table. The
+     * add_constant_data_object function is a variant of this which records a
+     * constant "variable". */
+    void add_data_object (const token& type, const token& id, bool is_constant = false);
+    void add_constant_data_object (const token& type, const token& id);
+
+    /* For now, this simply verifies that the given identifer has been
+     * previously declared in some active scope. */
+    void check_referenced_data_object (const token& id);
+
     scanner m_gettoken;
     std::istream& m_input;
     token m_token;
+
+    scoped_symbol_table m_symtab;
+    location_type m_next_location = 0;
+
+    /* This flag is set to false if an error occurs. */
+    bool m_good = true;
 };
 
 #endif

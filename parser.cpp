@@ -3,9 +3,15 @@
  * CS4110 - Compiler Design
  * Author: Harris Hancock (hhancock 'at' horizon)
  *
- * Baby Ada Compiler Assignment (7 November 2013)
+ * Baby Ada Compiler Assignment (14 November 2013)
  *
  * parser.cpp
+ *
+ * Update 14 Nov: Rather than tokens using std::strings as their lexeme type,
+ * my scanner now uses a ci_string (case-insensitive string), whose compare
+ * operations are always case-insensitive. Also, the add_data_object(),
+ * add_constant_data_object(), and check_referenced_data_object() functions
+ * were added, and used in the grammar.
  *
  * This file contains the implementation of a Baby Ada recursive descent
  * parser. In addition to the production rules themselves, we define an error
@@ -93,18 +99,42 @@ first_set express {
 
 } // namespace first
 
-/* Emit an error message and abort. fmt must be a printf-compatible format
- * string suitable for use with the rest of the arguments passed. */
-void error (const char* fmt, ...) {
+
+//////////////////////////////////////////////////////////////////////////////
+
+
+/* Emit an error message. fmt must be a printf-compatible format string
+ * suitable for use with the rest of the arguments passed. */
+void emit_error (int lineno, const char* fmt, va_list ap) {
+    /* For now, compiler output is a bit of a mess, since we're printing the
+     * leftmost derivation interleaved with errors. A leading newline will
+     * help readability until I can clean up the output. */
+    fprintf(stderr, "\nerror on line %d: ", lineno);
+    vfprintf(stderr, fmt, ap);
+}
+
+/* Emit a syntax error and abort. fmt has the same constraints as for
+ * emit_error(). */
+void syntax_error (int lineno, const char* fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
-    fprintf(stderr, "error: ");
-    vfprintf(stderr, fmt, ap);
+    emit_error(lineno, fmt, ap);
     va_end(ap);
     abort();
 }
 
+/* Emit a semantic error and continue. fmt has the same constraints as for
+ * emit_error(). */
+void semantic_error (int lineno, const char* fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    emit_error(lineno, fmt, ap);
+    va_end(ap);
+}
+
+
 //////////////////////////////////////////////////////////////////////////////
+
 
 /* match and predict are the two primary operations that my recursive descent
  * routines will call. predict allows the parser to decide which right-hand-
@@ -119,7 +149,7 @@ void error (const char* fmt, ...) {
  * advance the token stream. If it does not, report an error. */
 void parser::match (const token::token_id tok) {
     if (tok != m_token.get_token_id()) {
-        error("line %d: expected token %d, got token %d\n", m_token.lineno(),
+        syntax_error(m_token.lineno(), "expected token %d, got token %d\n",
                 tok, m_token.get_token_id());
     }
     else {
@@ -138,18 +168,76 @@ bool parser::predict (const first_set& fir) const {
     return fir.end() != fir.find(m_token.get_token_id());
 }
 
+
 //////////////////////////////////////////////////////////////////////////////
+
+
+/* The *_data_object routines here are auxiliary functions for use in the
+ * recursive descent grammar to manage identifiers in the symbol table. */
+
+/* Add a data object to the symbol table represented by the given type and
+ * identifier tokens. The data object may or may not be specified as constant. */
+void parser::add_data_object (const token& type, const token& id, bool is_constant) {
+    auto result = m_symtab.insert(id.lexeme());
+
+    if (false == result.second) {
+        m_good = false;
+        semantic_error(id.lineno(), "redeclaration of '%s'\n", id.lexeme().c_str());
+
+        /* We don't want to modify the current record--just bail. */
+        return;
+    }
+
+    /* result is a std::pair:
+     *  (iterator, bool)
+     * where iterator "points" to a std::pair:
+     *  (key, value)
+     * where key is the (scope_id, lexeme) key and value is the
+     * data_object_record that we actually care about. */
+    auto& record = result.first->second;
+
+    record.is_constant = is_constant;
+    record.type = keyword_to_type(type.lexeme());
+    record.location = m_next_location;
+
+    m_next_location -= WORD_SIZE;
+}
+
+/* Convenience function to add a constant data object to the symbol table. */
+void parser::add_constant_data_object (const token& type, const token& id) {
+    add_data_object(type, id, true);
+}
+
+/* Check to make sure that an identifier exists in the symbol table. Does not
+ * perform any action beyond this semantic check. */
+void parser::check_referenced_data_object (const token& id) {
+    auto it = m_symtab.find_in_active_scopes(id.lexeme());
+
+    if (m_symtab.end() == it) {
+        m_good = false;
+        semantic_error(id.lineno(), "use of undeclared identifier '%s'\n",
+                id.lexeme().c_str());
+    }
+}
+
+
+//////////////////////////////////////////////////////////////////////////////
+
 
 /* What follows is the grammar for Baby Ada, translated into mutually
  * recursive functions. For nullable rules, I return on any unexpected token,
  * not just the rule's FOLLOW set. There are no real surprises in the
- * functions, with each one following a fairly obvious pattern, so I didn't
- * see any need for further comments. */
+ * functions, with each one following a fairly obvious pattern. */
 
+/* program ::= PROCEDURE ID IS decls BEGIN stats END ID ';' */
 void parser::program () {
     PRINTRULE(program);
 
+    m_symtab.open_scope();
+
     match(token::procedure);
+    /* Note that I'm in CS4110, so I'm not worrying about procedures, and not
+     * putting this identifier into my symbol table (at least not yet). */
     match(token::identifier);
     match(token::is);
     decls();
@@ -158,8 +246,11 @@ void parser::program () {
     match(token::end);
     match(token::identifier);
     match(token::semicolon);
+
+    m_symtab.close_scope();
 }
 
+/* stats ::= statmt stats | <empty> */
 void parser::stats () {
     if (predict(first::statmt)) {
         PRINTRULE(stats);
@@ -172,6 +263,7 @@ void parser::stats () {
     }
 }
 
+/* decls ::= decl decls | <empty> */
 void parser::decls () {
     if (predict(token::identifier)) {
         PRINTRULE(decls);
@@ -184,37 +276,55 @@ void parser::decls () {
     }
 }
 
+/* decl ::= ID ':' rest */
 void parser::decl () {
     PRINTRULE(decl);
 
+    /* Save the current token until <rest> finds out the type. */
+    token declared_id = m_token;
+
     match(token::identifier);
     match(token::colon);
-    rest();
+    rest(declared_id);
 }
 
-void parser::rest () {
+/* rest ::= TYPE ';' | CONSTANT TYPE ASSIGN LITERAL ';' */
+void parser::rest (const token& declared_id) {
     if (predict(token::type)) {
         PRINTRULE(rest_type);
 
+        /* Save the current token--we want to perform our semantic action
+         * (adding the id to the symbol table) after completing this rule's
+         * syntax checks. */
+        token declared_type = m_token;
+
         match(token::type);
         match(token::semicolon);
+
+        add_data_object(declared_type, declared_id);
     }
     else if (predict(token::constant)) {
         PRINTRULE(rest_constant);
 
         match(token::constant);
+
+        /* Save current token--see comment above. */
+        token declared_type = m_token;
+
         match(token::type);
         match(token::assign);
         match(token::literal);
         match(token::semicolon);
+
+        add_constant_data_object(declared_type, declared_id);
     }
     else {
-        error("line %d: expected token (%d | %d), got token %d\n",
-                m_token.lineno(),
+        syntax_error(m_token.lineno(), "expected token (%d | %d), got token %d\n",
                 token::type, token::constant, m_token.get_token_id());
     }
 }
 
+/* statmt ::= assignstat | ifstat | readstat | writestat | blockst | loopst */
 void parser::statmt () {
     if (predict(token::identifier)) {
         PRINTRULE(statmt_assign);
@@ -241,13 +351,14 @@ void parser::statmt () {
         loopst();
     }
     else {
-        error("line %d: expected token (%d | %d | %d | %d | %d | %d | %d), "
-                "got token %d\n", m_token.lineno(), token::identifier,
+        syntax_error(m_token.lineno(), "expected token (%d | %d | %d | %d | %d | %d | %d), "
+                "got token %d\n", token::identifier,
                 token::if_, token::read, token::write, token::begin,
                 token::declare, token::while_, m_token.get_token_id());
     }
 }
 
+/* assignstat ::= idnonterm ASSIGN express ';' */
 void parser::assignstat () {
     PRINTRULE(assignstat);
 
@@ -257,6 +368,7 @@ void parser::assignstat () {
     match(token::semicolon);
 }
 
+/* ifstat ::= IF express THEN stats END IF ';' */
 void parser::ifstat () {
     PRINTRULE(ifstat);
 
@@ -269,6 +381,7 @@ void parser::ifstat () {
     match(token::semicolon);
 }
 
+/* readstat ::= READ '(' idnonterm ')' ';' */
 void parser::readstat () {
     PRINTRULE(readstat);
 
@@ -279,6 +392,7 @@ void parser::readstat () {
     match(token::semicolon);
 }
 
+/* writestat ::= WRITE '(' writeexp ')' ';' */
 void parser::writestat () {
     PRINTRULE(writestat);
 
@@ -289,6 +403,7 @@ void parser::writestat () {
     match(token::semicolon);
 }
 
+/* WHILE express LOOP stats END LOOP ';' */
 void parser::loopst () {
     PRINTRULE(loopst);
 
@@ -301,16 +416,22 @@ void parser::loopst () {
     match(token::semicolon);
 }
 
+/* blockst ::= declpart BEGIN stats END ';' */
 void parser::blockst () {
     PRINTRULE(blockst);
+
+    m_symtab.open_scope();
 
     declpart();
     match(token::begin);
     stats();
     match(token::end);
     match(token::semicolon);
+
+    m_symtab.close_scope();
 }
 
+/* declpart ::= DECLARE decl decls | <empty> */
 void parser::declpart () {
     if (predict(token::declare)) {
         PRINTRULE(declpart);
@@ -324,6 +445,7 @@ void parser::declpart () {
     }
 }
 
+/* writeexp ::= STRING | express */
 void parser::writeexp () {
     if (predict(token::string)) {
         PRINTRULE(writeexp_string);
@@ -336,13 +458,14 @@ void parser::writeexp () {
         express();
     }
     else {
-        error("line %d: expected token (%d | %d | %d | %d | %d | %d), "
-                "got token %d\n", m_token.lineno(), token::string,
+        syntax_error(m_token.lineno(), "expected token (%d | %d | %d | %d | %d | %d), "
+                "got token %d\n", token::string,
                 token::not_, token::identifier, token::literal,
                 token::lparen, m_token.get_token_id());
     }
 }
 
+/* express ::= term expprime */
 void parser::express () {
     PRINTRULE(express);
 
@@ -350,6 +473,7 @@ void parser::express () {
     expprime();
 }
 
+/* expprime ::= ADDOP term expprime | <empty> */
 void parser::expprime () {
     if (predict(token::addop)) {
         PRINTRULE(expprime);
@@ -363,6 +487,7 @@ void parser::expprime () {
     }
 }
 
+/* term ::= relfactor termprime */
 void parser::term () {
     PRINTRULE(term);
 
@@ -370,6 +495,7 @@ void parser::term () {
     termprime();
 }
 
+/* termprime ::= MULOP relfactor termprime | <empty> */
 void parser::termprime () {
     if (predict(token::mulop)) {
         PRINTRULE(termprime);
@@ -383,6 +509,7 @@ void parser::termprime () {
     }
 }
 
+/* relfactor ::= factor factorprime */
 void parser::relfactor () {
     PRINTRULE(relfactor);
 
@@ -390,6 +517,7 @@ void parser::relfactor () {
     factorprime();
 }
 
+/* factorprime ::= RELOP factor | <empty> */
 void parser::factorprime () {
     if (predict(token::relop)) {
         PRINTRULE(factorprime);
@@ -402,6 +530,7 @@ void parser::factorprime () {
     }
 }
 
+/* factor ::= NOT factor | idnonterm | LITERAL | '(' express ')' */
 void parser::factor () {
     if (predict(token::not_)) {
         PRINTRULE(factor_not);
@@ -427,14 +556,20 @@ void parser::factor () {
         match(token::rparen);
     }
     else {
-        error("line %d: expected token (%d | %d | %d | %d), got token %d\n",
-                m_token.lineno(), token::not_, token::identifier,
-                token::literal, token::lparen, m_token.get_token_id());
+        syntax_error(m_token.lineno(), "expected token (%d | %d | %d | %d), got token %d\n",
+                token::not_, token::identifier, token::literal, token::lparen,
+                m_token.get_token_id());
     }
 }
 
+/* idnonterm ::= ID */
 void parser::idnonterm () {
     PRINTRULE(idnonterm);
 
+    /* Save current token for later semantic action. */
+    token referenced_id = m_token;
+
     match(token::identifier);
+
+    check_referenced_data_object(referenced_id);
 }

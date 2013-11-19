@@ -11,11 +11,14 @@
 #ifndef SCANNER_HPP
 #define SCANNER_HPP
 
+#include "ci_string.hpp"
+
 #include <cctype>
 
 #include <algorithm>
 #include <iostream>
 #include <map>
+#if 0
 #include <string>
 
 /* Case-insensitive comparator for use with our keyword map. */
@@ -27,6 +30,7 @@ struct ciless {
                 [] (char x, char y) { return tolower(x) < tolower(y); });
     }
 };
+#endif
 
 /* Representation of a token, complete with lexeme and line number from which
  * it appears. */
@@ -88,9 +92,10 @@ public:
     void set_lineno (int lineno) { m_lineno = lineno; }
     void set_token_id (token_id id) { m_token_id = id; }
 
-    int lineno () const { return m_lineno; }
-
+    
     token_id get_token_id () const { return m_token_id; }
+    int lineno () const { return m_lineno; }
+    ci_string lexeme () const { return m_lexeme; }
 
     /* For an alphabetic lexeme, look up the token number in the keyword
      * dictionary. Sets token to identifier, if not found in the dictionary. */
@@ -113,14 +118,14 @@ public:
 
 private:
     /* A case-insensitive map of keywords to token_ids. */
-    static const std::map<std::string, token::token_id, ciless> s_keyword_to_token_id;
+    static const std::map<ci_string, token::token_id> s_keyword_to_token_id;
 
     /* Get a human-readable C string for a given token_id. */
     static const char* token_id_to_string (token_id elem);
 
     token_id m_token_id;
     int m_lineno;
-    std::string m_lexeme;
+    ci_string m_lexeme;
 };
 
 //////////////////////////////////////////////////////////////////////////////

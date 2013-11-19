@@ -3,7 +3,7 @@
  * CS4110 - Compiler Design
  * Author: Harris Hancock (hhancock 'at' horizon)
  *
- * Baby Ada Compiler Assignment (7 November 2013)
+ * Baby Ada Compiler Assignment (14 November 2013)
  *
  * test_parser.cpp
  *
@@ -13,6 +13,7 @@
 #include "parser.hpp"
 #include <cassert>
 #include <fstream>
+#include <iostream>
 
 /* Usage: ./test_parser <filename>
  *      where filename is an Ada program
@@ -24,5 +25,17 @@ int main (int argc, char** argv) {
      * instantiation. */
     parser p (input, scanner());
     input.close();
-    printf("\nProgram accepted!\n");
+
+    /* Since we simply abort on syntactic errors (for now), if we get this far
+     * then we know that the program has a valid parse tree. */
+    std::cout << "\nProgram is syntactically correct\n";
+
+    if (p.good()) {
+        std::cout << "Program accepted!\n";
+    }
+    else {
+        std::cout << "Program failed semantic checking\n";
+    }
+
+    p.display_symbol_table(std::cout);
 }
