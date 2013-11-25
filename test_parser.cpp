@@ -21,10 +21,12 @@
 int main (int argc, char** argv) {
     assert(argc > 1);
     std::ifstream input (argv[1]);
+    std::ofstream output ("out.s");
     /* Note that this next line performs the actual parse during object
      * instantiation. */
-    parser p (input, scanner());
+    parser p (input, scanner(), output);
     input.close();
+    output.close();
 
     /* Since we simply abort on syntactic errors (for now), if we get this far
      * then we know that the program has a valid parse tree. */

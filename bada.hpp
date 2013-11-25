@@ -57,6 +57,9 @@ enum class bada_type {
  * bada_type. */
 bada_type keyword_to_type (const ci_string& keyword);
 
+/* Deduce the type of a given literal value. */
+bada_type literal_to_type (const ci_string& literal);
+
 using location_type = std::ptrdiff_t;
 
 /* A simple symbol table entry. */

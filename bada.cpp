@@ -32,3 +32,16 @@ bada_type keyword_to_type (const ci_string& keyword) {
     /* Should never be reached, unless the scanner's broken. */
     assert(false);
 }
+
+/* Deduce the type of a given literal value. */
+bada_type literal_to_type (const ci_string& literal) {
+    if (!literal.compare(KWD_TRUE) || !literal.compare(KWD_FALSE)) {
+        return bada_type::boolean;
+    }
+    else if (ci_string::npos != literal.find('.')) {
+        return bada_type::real;
+    }
+    else {
+        return bada_type::integer;
+    }
+}

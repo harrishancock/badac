@@ -41,9 +41,10 @@ using first_set = std::set<token::token_id>;
  * of using a constructor to perform a computation. */
 class parser {
 public:
-    parser (std::istream& input, scanner gettoken)
+    parser (std::istream& input, scanner gettoken, std::ostream& output)
             : m_gettoken(gettoken)
-            , m_input(input) {
+            , m_input(input)
+            , m_output(output) {
         /* Perform the actual parse. */
         m_gettoken(m_input, m_token);
         program();
@@ -75,14 +76,14 @@ private:
     void blockst ();
     void declpart ();
     void writeexp ();
-    void express ();
-    void expprime ();
-    void term ();
-    void termprime ();
-    void relfactor ();
-    void factorprime ();
-    void factor ();
-    void idnonterm ();
+    void express (data_object_record&);
+    void expprime (data_object_record&);
+    void term (data_object_record&);
+    void termprime (data_object_record&);
+    void relfactor (data_object_record&);
+    void factorprime (data_object_record&);
+    void factor (data_object_record&);
+    void idnonterm (data_object_record&);
 
     /* match and predict are the two primary operations the parser uses to
      * work its way through the token stream. */
@@ -96,13 +97,18 @@ private:
     void add_data_object (const token& type, const token& id, bool is_constant = false);
     void add_constant_data_object (const token& type, const token& id);
 
-    /* For now, this simply verifies that the given identifer has been
-     * previously declared in some active scope. */
-    void check_referenced_data_object (const token& id);
+    /* Load the type and location of the given identifier's referenced object
+     * into exprec. */
+    void get_referenced_data_object (const token& id, data_object_record& exprec);
+
+    /* Generate one line of MIPS code. */
+    void codegen (std::string instr, std::string arg1, std::string arg2);
 
     scanner m_gettoken;
-    std::istream& m_input;
     token m_token;
+
+    std::istream& m_input;
+    std::ostream& m_output;
 
     scoped_symbol_table m_symtab;
     location_type m_next_location = 0;

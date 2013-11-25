@@ -10,7 +10,7 @@
  * Update 14 Nov: Rather than tokens using std::strings as their lexeme type,
  * my scanner now uses a ci_string (case-insensitive string), whose compare
  * operations are always case-insensitive. Also, the add_data_object(),
- * add_constant_data_object(), and check_referenced_data_object() functions
+ * add_constant_data_object(), and get_referenced_data_object() functions
  * were added, and used in the grammar.
  *
  * This file contains the implementation of a Baby Ada recursive descent
@@ -210,13 +210,27 @@ void parser::add_constant_data_object (const token& type, const token& id) {
 
 /* Check to make sure that an identifier exists in the symbol table. Does not
  * perform any action beyond this semantic check. */
-void parser::check_referenced_data_object (const token& id) {
+void parser::get_referenced_data_object (const token& id, data_object_record& exprec) {
     auto it = m_symtab.find_in_active_scopes(id.lexeme());
 
     if (m_symtab.end() == it) {
         m_good = false;
         semantic_error(id.lineno(), "use of undeclared identifier '%s'\n",
                 id.lexeme().c_str());
+    }
+    else {
+        /* Load the data_object_record from the symbol table. */
+        exprec = it->second;
+    }
+}
+
+
+//////////////////////////////////////////////////////////////////////////////
+
+
+void parser::codegen (std::string instr, std::string arg1, std::string arg2) {
+    if (good()) {
+        m_output << '\t' << instr << '\t' << arg1 << '\t' << arg2 << '\n';
     }
 }
 
@@ -362,10 +376,16 @@ void parser::statmt () {
 void parser::assignstat () {
     PRINTRULE(assignstat);
 
-    idnonterm();
+    data_object_record lhs, rhs;
+
+    idnonterm(lhs);
     match(token::assign);
-    express();
+    express(rhs);
     match(token::semicolon);
+
+    /* Copy the object from the right-hand-side to the left-hand-side. */
+    codegen("lw", "$t0", (std::to_string(rhs.location) + "($fp)"));
+    codegen("sw", "$t0", (std::to_string(lhs.location) + "($fp)"));
 }
 
 /* ifstat ::= IF express THEN stats END IF ';' */
@@ -373,7 +393,8 @@ void parser::ifstat () {
     PRINTRULE(ifstat);
 
     match(token::if_);
-    express();
+    data_object_record TODO;
+    express(TODO);
     match(token::then);
     stats();
     match(token::end);
@@ -387,7 +408,8 @@ void parser::readstat () {
 
     match(token::read);
     match(token::lparen);
-    idnonterm();
+    data_object_record TODO;
+    idnonterm(TODO);
     match(token::rparen);
     match(token::semicolon);
 }
@@ -408,7 +430,8 @@ void parser::loopst () {
     PRINTRULE(loopst);
 
     match(token::while_);
-    express();
+    data_object_record TODO;
+    express(TODO);
     match(token::loop);
     stats();
     match(token::end);
@@ -455,7 +478,8 @@ void parser::writeexp () {
     else if (predict(first::express)) {
         PRINTRULE(writeexp_express);
 
-        express();
+        data_object_record TODO;
+        express(TODO);
     }
     else {
         syntax_error(m_token.lineno(), "expected token (%d | %d | %d | %d | %d | %d), "
@@ -466,21 +490,28 @@ void parser::writeexp () {
 }
 
 /* express ::= term expprime */
-void parser::express () {
+void parser::express (data_object_record& exprec) {
     PRINTRULE(express);
 
-    term();
-    expprime();
+    term(exprec);
+    expprime(exprec);
 }
 
 /* expprime ::= ADDOP term expprime | <empty> */
-void parser::expprime () {
+void parser::expprime (data_object_record& lhs) {
     if (predict(token::addop)) {
         PRINTRULE(expprime);
 
+        /* Save the operation to perform. */
+        token operation = m_token;
         match(token::addop);
-        term();
-        expprime();
+
+        data_object_record rhs;
+        term(rhs);
+
+        /* TODO generate code */
+
+        expprime(lhs);
     }
     else {
         PRINTRULE(expprime_null);
@@ -488,21 +519,28 @@ void parser::expprime () {
 }
 
 /* term ::= relfactor termprime */
-void parser::term () {
+void parser::term (data_object_record& exprec) {
     PRINTRULE(term);
 
-    relfactor();
-    termprime();
+    relfactor(exprec);
+    termprime(exprec);
 }
 
 /* termprime ::= MULOP relfactor termprime | <empty> */
-void parser::termprime () {
+void parser::termprime (data_object_record& lhs) {
     if (predict(token::mulop)) {
         PRINTRULE(termprime);
 
+        /* Save the operation to perform. */
+        token operation = m_token;
         match(token::mulop);
-        relfactor();
-        termprime();
+
+        data_object_record rhs;
+        relfactor(rhs);
+
+        /* TODO generate code */
+
+        termprime(lhs);
     }
     else {
         PRINTRULE(termprime_null);
@@ -510,20 +548,26 @@ void parser::termprime () {
 }
 
 /* relfactor ::= factor factorprime */
-void parser::relfactor () {
+void parser::relfactor (data_object_record& exprec) {
     PRINTRULE(relfactor);
 
-    factor();
-    factorprime();
+    factor(exprec);
+    factorprime(exprec);
 }
 
 /* factorprime ::= RELOP factor | <empty> */
-void parser::factorprime () {
+void parser::factorprime (data_object_record& lhs) {
     if (predict(token::relop)) {
         PRINTRULE(factorprime);
 
+        /* Save the operation to perform. */
+        token operation = m_token;
         match(token::relop);
-        factor();
+
+        data_object_record rhs;
+        factor(rhs);
+
+        /* TODO generate code */
     }
     else {
         PRINTRULE(factorprime_null);
@@ -531,28 +575,39 @@ void parser::factorprime () {
 }
 
 /* factor ::= NOT factor | idnonterm | LITERAL | '(' express ')' */
-void parser::factor () {
+void parser::factor (data_object_record& exprec) {
     if (predict(token::not_)) {
         PRINTRULE(factor_not);
 
         match(token::not_);
-        factor();
+        factor(exprec);
+
+        /* TODO generate code */
     }
     else if (predict(token::identifier)) {
         PRINTRULE(factor_id);
 
-        idnonterm();
+        idnonterm(exprec);
     }
     else if (predict(token::literal)) {
         PRINTRULE(factor_literal);
 
+        token lit = m_token;
         match(token::literal);
+
+        exprec.is_constant = false;
+        exprec.type = literal_to_type(lit.lexeme());
+        exprec.location = m_next_location;
+
+        m_next_location -= WORD_SIZE;
+
+        /* TODO generate code */
     }
     else if (predict(token::lparen)) {
         PRINTRULE(factor_express);
 
         match(token::lparen);
-        express();
+        express(exprec);
         match(token::rparen);
     }
     else {
@@ -563,7 +618,7 @@ void parser::factor () {
 }
 
 /* idnonterm ::= ID */
-void parser::idnonterm () {
+void parser::idnonterm (data_object_record& exprec) {
     PRINTRULE(idnonterm);
 
     /* Save current token for later semantic action. */
@@ -571,5 +626,6 @@ void parser::idnonterm () {
 
     match(token::identifier);
 
-    check_referenced_data_object(referenced_id);
+    /* Load the type and location of this identifier's referent. */
+    get_referenced_data_object(referenced_id, exprec);
 }
