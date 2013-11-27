@@ -228,9 +228,86 @@ void parser::get_referenced_data_object (const token& id, data_object_record& ex
 //////////////////////////////////////////////////////////////////////////////
 
 
+/* Generate the code for program startup. */
+void parser::codegen_preamble () {
+    if (good()) {
+        codegen_raw("# Begin preamble");
+        codegen_raw(".text");
+        codegen_raw(".globl main");
+        codegen_raw("main:");
+        codegen("move", "$fp", "$sp");
+        codegen("la", "$a0", "ProgStart");
+        codegen("li", "$v0", "4");
+        codegen("syscall");
+        codegen_raw("# Begin translated code");
+    }
+}
+
+/* Generate the code for program shutdown. */
+void parser::codegen_postamble () {
+    if (good()) {
+        codegen_raw("# Begin postamble");
+        codegen("la", "$a0", "ProgEnd");
+        codegen("li", "$v0", "4");
+        codegen("syscall");
+        codegen("li", "$v0", "10");
+        codegen("syscall");
+        codegen_raw(".data");
+        codegen_raw("ProgStart:\t.asciiz\t\"Program Start\\n\"");
+        codegen_raw("ProgEnd:\t.asciiz\t\"Program End\\n\"");
+    }
+}
+
+/* Generate one line of MIPS code, unindented, tab-delimited. */
+void parser::codegen_raw (std::string arg1) {
+    if (good()) {
+        m_output << arg1 << '\n';
+    }
+}
+
+/* Generate one line of MIPS code, unindented, tab-delimited. */
+void parser::codegen_raw (std::string arg1, std::string arg2) {
+    if (good()) {
+        m_output << arg1 << '\t' << arg2 << '\n';
+    }
+}
+
+/* Generate one line of MIPS code, unindented, tab-delimited. */
+void parser::codegen_raw (std::string arg1, std::string arg2, std::string arg3) {
+    if (good()) {
+        m_output << arg1 << '\t' << arg2 << '\t' << arg3 << '\n';
+    }
+}
+
+/* Generate one line of MIPS code, indented, tab after instr, commas between
+ * arguments. */
+void parser::codegen (std::string instr) {
+    if (good()) {
+        m_output << '\t' << instr << '\n';
+    }
+}
+
+/* Generate one line of MIPS code, indented, tab after instr, commas between
+ * arguments. */
+void parser::codegen (std::string instr, std::string arg1) {
+    if (good()) {
+        m_output << '\t' << instr << '\t' << arg1 << '\n';
+    }
+}
+
+/* Generate one line of MIPS code, indented, tab after instr, commas between
+ * arguments. */
 void parser::codegen (std::string instr, std::string arg1, std::string arg2) {
     if (good()) {
-        m_output << '\t' << instr << '\t' << arg1 << '\t' << arg2 << '\n';
+        m_output << '\t' << instr << '\t' << arg1 << ',' << arg2 << '\n';
+    }
+}
+
+/* Generate one line of MIPS code, indented, tab after instr, commas between
+ * arguments. */
+void parser::codegen (std::string instr, std::string arg1, std::string arg2, std::string arg3) {
+    if (good()) {
+        m_output << '\t' << instr << '\t' << arg1 << ',' << arg2 << ',' << arg3 << '\n';
     }
 }
 
@@ -377,15 +454,22 @@ void parser::assignstat () {
     PRINTRULE(assignstat);
 
     data_object_record lhs, rhs;
+    int lineno = m_token.lineno();
 
     idnonterm(lhs);
     match(token::assign);
     express(rhs);
     match(token::semicolon);
 
+    if (lhs.type != rhs.type) {
+        semantic_error(lineno, "type mismatch\n");
+        m_good = false;
+    }
+
     /* Copy the object from the right-hand-side to the left-hand-side. */
-    codegen("lw", "$t0", (std::to_string(rhs.location) + "($fp)"));
-    codegen("sw", "$t0", (std::to_string(lhs.location) + "($fp)"));
+    codegen("# assignstat");
+    codegen("lw", "$t0", std::to_string(rhs.location) + "($fp)");
+    codegen("sw", "$t0", std::to_string(lhs.location) + "($fp)");
 }
 
 /* ifstat ::= IF express THEN stats END IF ';' */
@@ -393,6 +477,7 @@ void parser::ifstat () {
     PRINTRULE(ifstat);
 
     match(token::if_);
+    /* TODO implement */
     data_object_record TODO;
     express(TODO);
     match(token::then);
@@ -406,23 +491,57 @@ void parser::ifstat () {
 void parser::readstat () {
     PRINTRULE(readstat);
 
+    data_object_record exprec;
+
+    /* Save the line number for possible error reporting. */
+    int lineno = m_token.lineno();
+
     match(token::read);
     match(token::lparen);
-    data_object_record TODO;
-    idnonterm(TODO);
+    idnonterm(exprec);
     match(token::rparen);
     match(token::semicolon);
+
+    if (bada_type::integer == exprec.type) {
+        /* Read an integer. */
+        codegen("# readstat -- read an integer");
+        codegen("li", "$v0", "5");
+        codegen("syscall");
+        codegen("sw", "$v0", std::to_string(exprec.location) + "($fp)");
+    }
+    else if (bada_type::real == exprec.type) {
+        /* TODO implement */
+        assert(false);
+    }
+    else if (bada_type::boolean == exprec.type) {
+        /* TODO implement */
+        assert(false);
+    }
+    else {
+        semantic_error(lineno, "read statement argument has incompatible type");
+        m_good = false;
+    }
 }
 
 /* writestat ::= WRITE '(' writeexp ')' ';' */
 void parser::writestat () {
     PRINTRULE(writestat);
 
+    token writetok = m_token;
+
     match(token::write);
     match(token::lparen);
     writeexp();
     match(token::rparen);
     match(token::semicolon);
+
+    if (!writetok.lexeme().compare(KWD_PUT_LINE)) {
+        /* Print a newline character. */
+        codegen("# writestat -- print newline");
+        codegen("li", "$a0", "0x0a");
+        codegen("li", "$v0", "11");
+        codegen("syscall");
+    }
 }
 
 /* WHILE express LOOP stats END LOOP ';' */
@@ -473,13 +592,49 @@ void parser::writeexp () {
     if (predict(token::string)) {
         PRINTRULE(writeexp_string);
 
+        token writestring = m_token;
+
         match(token::string);
+
+        auto label = next_string_label();
+
+        codegen("# writeexp -- write a string literal");
+
+        /* Define the string literal in MIPS.*/
+        codegen_raw(".data");
+        codegen_raw(label + ':', ".asciiz", writestring.lexeme().c_str());
+        codegen_raw(".text");
+
+        /* Print the string literal. */
+        codegen("la", "$a0", label);
+        codegen("li", "$v0", "4");
+        codegen("syscall");
     }
     else if (predict(first::express)) {
         PRINTRULE(writeexp_express);
 
-        data_object_record TODO;
-        express(TODO);
+        data_object_record exprec;
+
+        express(exprec);
+
+        if (bada_type::integer == exprec.type) {
+            /* Write an integer. */
+            codegen("# writeexp -- write an integer literal");
+            codegen("lw", "$a0", std::to_string(exprec.location) + "($fp)");
+            codegen("li", "$v0", "1");
+            codegen("syscall");
+        }
+        else if (bada_type::real == exprec.type) {
+            /* TODO implement */
+            assert(false);
+        }
+        else if (bada_type::boolean == exprec.type) {
+            /* TODO implement */
+            assert(false);
+        }
+        else {
+            assert(false);
+        }
     }
     else {
         syntax_error(m_token.lineno(), "expected token (%d | %d | %d | %d | %d | %d), "
@@ -498,20 +653,23 @@ void parser::express (data_object_record& exprec) {
 }
 
 /* expprime ::= ADDOP term expprime | <empty> */
-void parser::expprime (data_object_record& lhs) {
+void parser::expprime (data_object_record& exprec) {
     if (predict(token::addop)) {
         PRINTRULE(expprime);
 
+        /* Save the expression record of the left hand side of the op. */
+        data_object_record lhs = exprec;
+
         /* Save the operation to perform. */
         token operation = m_token;
+
         match(token::addop);
+        term(exprec);
 
-        data_object_record rhs;
-        term(rhs);
+        /* TODO generate code -- make a temporary with lhs and exprec, update
+         * exprec to point to this temporary, pass to expprime. */
 
-        /* TODO generate code */
-
-        expprime(lhs);
+        expprime(exprec);
     }
     else {
         PRINTRULE(expprime_null);
@@ -527,16 +685,18 @@ void parser::term (data_object_record& exprec) {
 }
 
 /* termprime ::= MULOP relfactor termprime | <empty> */
-void parser::termprime (data_object_record& lhs) {
+void parser::termprime (data_object_record& exprec) {
     if (predict(token::mulop)) {
         PRINTRULE(termprime);
 
+        /* Save the expression record of the left hand side of the op. */
+        data_object_record lhs = exprec;
+
         /* Save the operation to perform. */
         token operation = m_token;
-        match(token::mulop);
 
-        data_object_record rhs;
-        relfactor(rhs);
+        match(token::mulop);
+        relfactor(exprec);
 
         /* TODO generate code */
 
@@ -556,16 +716,18 @@ void parser::relfactor (data_object_record& exprec) {
 }
 
 /* factorprime ::= RELOP factor | <empty> */
-void parser::factorprime (data_object_record& lhs) {
+void parser::factorprime (data_object_record& exprec) {
     if (predict(token::relop)) {
         PRINTRULE(factorprime);
 
+        /* Save the expression record of the left hand side of the op. */
+        data_object_record lhs = exprec;
+
         /* Save the operation to perform. */
         token operation = m_token;
-        match(token::relop);
 
-        data_object_record rhs;
-        factor(rhs);
+        match(token::relop);
+        factor(exprec);
 
         /* TODO generate code */
     }
@@ -595,7 +757,8 @@ void parser::factor (data_object_record& exprec) {
         token lit = m_token;
         match(token::literal);
 
-        exprec.is_constant = false;
+        /* Allocate a place on the stack for this literal value. */
+        exprec.is_constant = true;
         exprec.type = literal_to_type(lit.lexeme());
         exprec.location = m_next_location;
 

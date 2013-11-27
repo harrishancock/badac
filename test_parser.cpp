@@ -20,8 +20,14 @@
  */
 int main (int argc, char** argv) {
     assert(argc > 1);
-    std::ifstream input (argv[1]);
-    std::ofstream output ("out.s");
+
+    const char* in_filename = argv[1];
+    const char* out_filename = "out.s";
+
+    std::cout << "Translating from " << in_filename << " to " << out_filename << '\n';
+
+    std::ifstream input (in_filename);
+    std::ofstream output (out_filename);
     /* Note that this next line performs the actual parse during object
      * instantiation. */
     parser p (input, scanner(), output);

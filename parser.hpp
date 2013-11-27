@@ -26,29 +26,21 @@ using first_set = std::set<token::token_id>;
  * I don't particularly like either of those approaches, so I made the parser
  * an object instead: the constructor sets up the state, then performs the
  * parse--a parser object is therefore a single-use object which performs a
- * computation once. Since we're not building parse trees yet, there is no
- * "return value", but this can be provided for later by including a
- * get_parse_tree() const accessor function. The parser object can later be
- * wrapped by a free function, say called parse(), that would look sort of
- * like this:
- *
- *      parse_tree parse (std::istream& input) {
- *          parser p (input, scanner());
- *          return p.get_parse_tree();
- *      }
- *
- * Such a free function isn't necessary; it would just hide some of the oddity
- * of using a constructor to perform a computation. */
+ * computation once. */
 class parser {
 public:
     parser (std::istream& input, scanner gettoken, std::ostream& output)
             : m_gettoken(gettoken)
             , m_input(input)
             , m_output(output) {
+        codegen_preamble();
+
         /* Perform the actual parse. */
         m_gettoken(m_input, m_token);
         program();
         match(token::eof);
+
+        codegen_postamble();
     }
 
     /* Dump the current state of the symbol table to the given output stream. */
@@ -85,11 +77,15 @@ private:
     void factor (data_object_record&);
     void idnonterm (data_object_record&);
 
+    //////////////////////////////////////////////////////////////////////////
+    
     /* match and predict are the two primary operations the parser uses to
      * work its way through the token stream. */
     void match (const token::token_id);
     bool predict (const token::token_id) const;
     bool predict (const first_set&) const;
+
+    //////////////////////////////////////////////////////////////////////////
 
     /* Add a data object (variable) to the symbol table. The
      * add_constant_data_object function is a variant of this which records a
@@ -101,8 +97,30 @@ private:
      * into exprec. */
     void get_referenced_data_object (const token& id, data_object_record& exprec);
 
-    /* Generate one line of MIPS code. */
+    //////////////////////////////////////////////////////////////////////////
+
+    /* Generate the MIPS program start/end boilerplate. */
+    void codegen_preamble ();
+    void codegen_postamble ();
+
+    /* Generate one line of MIPS code, unindented, tab-delimited. */
+    void codegen_raw (std::string arg1);
+    void codegen_raw (std::string arg1, std::string arg2);
+    void codegen_raw (std::string arg1, std::string arg2, std::string arg3);
+
+    /* Generate one line of MIPS code, indented, tab after instr, commas
+     * between arguments. */
+    void codegen (std::string instr);
+    void codegen (std::string instr, std::string arg1);
     void codegen (std::string instr, std::string arg1, std::string arg2);
+    void codegen (std::string instr, std::string arg1, std::string arg2, std::string arg3);
+
+    /* Generate a unique MIPS label for a string literal. */
+    std::string next_string_label () {
+        return std::string("_string_") + std::to_string(m_next_string_label++);
+    }
+
+    //////////////////////////////////////////////////////////////////////////
 
     scanner m_gettoken;
     token m_token;
@@ -112,6 +130,8 @@ private:
 
     scoped_symbol_table m_symtab;
     location_type m_next_location = 0;
+
+    int m_next_string_label = 0;
 
     /* This flag is set to false if an error occurs. */
     bool m_good = true;
