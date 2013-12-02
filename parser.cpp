@@ -196,11 +196,7 @@ void parser::add_data_object (const token& type, const token& id, bool is_consta
      * data_object_record that we actually care about. */
     auto& record = result.first->second;
 
-    record.is_constant = is_constant;
-    record.type = keyword_to_type(type.lexeme());
-    record.location = m_next_location;
-
-    m_next_location -= WORD_SIZE;
+    record = make_data_object_on_stack(keyword_to_type(type.lexeme()), is_constant);
 }
 
 /* Convenience function to add a constant data object to the symbol table. */
@@ -222,6 +218,24 @@ void parser::get_referenced_data_object (const token& id, data_object_record& ex
         /* Load the data_object_record from the symbol table. */
         exprec = it->second;
     }
+}
+
+/* Create a data_object_record that represents an object on the stack. */
+data_object_record parser::make_data_object_on_stack (bada_type type, bool is_constant = false) {
+    data_object_record rec;
+
+    rec.is_constant = is_constant;
+    rec.type = type;
+    rec.location = m_next_location;
+
+    m_next_location -= WORD_SIZE;
+
+    return rec;
+}
+
+/* Create a data_object_record that represents a constant object on the stack. */
+data_object_record parser::make_constant_data_object_on_stack (bada_type type) {
+    return make_data_object_on_stack(type, true);
 }
 
 
@@ -669,6 +683,14 @@ void parser::expprime (data_object_record& exprec) {
         /* TODO generate code -- make a temporary with lhs and exprec, update
          * exprec to point to this temporary, pass to expprime. */
 
+        if (exprec.type != lhs.type) {
+            /* XXX left off here */
+            m_good = false;
+        }
+
+        exprec = make_data_object_on_stack(exprec.type, 
+
+
         expprime(exprec);
     }
     else {
@@ -758,11 +780,7 @@ void parser::factor (data_object_record& exprec) {
         match(token::literal);
 
         /* Allocate a place on the stack for this literal value. */
-        exprec.is_constant = true;
-        exprec.type = literal_to_type(lit.lexeme());
-        exprec.location = m_next_location;
-
-        m_next_location -= WORD_SIZE;
+        exprec = make_constant_data_object_on_stack(literal_to_type(lit.lexeme()));
 
         /* TODO generate code */
     }

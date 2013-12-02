@@ -97,6 +97,10 @@ private:
      * into exprec. */
     void get_referenced_data_object (const token& id, data_object_record& exprec);
 
+    /* Make data objects on the stack. */
+    data_object_record make_data_object_on_stack (bada_type type, bool is_constant = false);
+    data_object_record make_constant_data_object_on_stack (bada_type type);
+
     //////////////////////////////////////////////////////////////////////////
 
     /* Generate the MIPS program start/end boilerplate. */
