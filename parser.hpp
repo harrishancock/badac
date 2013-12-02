@@ -90,8 +90,7 @@ private:
     /* Add a data object (variable) to the symbol table. The
      * add_constant_data_object function is a variant of this which records a
      * constant "variable". */
-    void add_data_object (const token& type, const token& id, bool is_constant = false);
-    void add_constant_data_object (const token& type, const token& id);
+    void add_data_object_to_symtab (const token& id, const data_object_record& record);
 
     /* Load the type and location of the given identifier's referenced object
      * into exprec. */
@@ -118,6 +117,12 @@ private:
     void codegen (std::string instr, std::string arg1);
     void codegen (std::string instr, std::string arg1, std::string arg2);
     void codegen (std::string instr, std::string arg1, std::string arg2, std::string arg3);
+
+    /* Generate code corresponding to a Baby Ada operation. */
+    void codegen_op (const token& tok, data_object_record dest, data_object_record lhs, data_object_record rhs);
+
+    /* Generate code to initialize a Baby Ada data object. */
+    void initialize_data_object (const data_object_record& record, const token& lit);
 
     /* Generate a unique MIPS label for a string literal. */
     std::string next_string_label () {

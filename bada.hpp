@@ -47,6 +47,19 @@
 #define KWD_END "end"
 #define KWD_LOOP "loop"
 
+#define ADDOP_ADD "+"
+#define ADDOP_SUBTRACT "-"
+#define ADDOP_OR KWD_OR
+
+#define MULOP_MULTIPLY "*"
+#define MULOP_DIVIDE "/"
+#define MULOP_MOD KWD_MOD
+#define MULOP_AND KWD_AND
+
+#define RELOP_LT "<"
+#define RELOP_GT ">"
+#define RELOP_EQ "="
+
 enum class bada_type {
     integer,
     real,

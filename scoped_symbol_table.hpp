@@ -101,11 +101,11 @@ public:
      * scope. Returns an iterator to the newly-created element, or the
      * previously existing element, and a boolean signifying whether or not
      * an insertion actually took place (true == insertion succeeded). */
-    std::pair<iterator, bool> insert (const identifier& id) {
+    std::pair<iterator, bool> insert (const identifier& id, const data_object_record& record) {
         assert(!m_active_scopes.empty());
 
         auto key = std::make_pair(m_active_scopes.front(), id);
-        auto value = std::make_pair(key, data_object_record());
+        auto value = std::make_pair(key, record);
         return m_symbol_table.insert(value);
     }
 

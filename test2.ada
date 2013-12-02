@@ -1,16 +1,18 @@
 -- A program to test reading and writing of integers, writing strings, and
 -- simple variable-to-variable assignment.
 procedure prog is
-	myFave : integer;
-	yourFave : integer;
+	a : constant integer := 100;
+	b : constant integer := 200;
+	c : integer;
 	begin
-
-	put("Hi. What's your favorite integer?\n> ");
-	get(yourFave);
-
-	myFave := yourFave;
-
-	put("What a coincidence! My favorite's ");
-	put(myFave);
-	put_line(", as well!");
+	c := a + b;
+	put_line(c);
+	c := a * b;
+	put_line(c);
+	c := a - b;
+	put_line(c);
+	c := a / b;
+	put_line(c);
+	c := a mod b;
+	put_line(c);
 end prog;

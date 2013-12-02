@@ -176,32 +176,15 @@ bool parser::predict (const first_set& fir) const {
  * recursive descent grammar to manage identifiers in the symbol table. */
 
 /* Add a data object to the symbol table represented by the given type and
- * identifier tokens. The data object may or may not be specified as constant. */
-void parser::add_data_object (const token& type, const token& id, bool is_constant) {
-    auto result = m_symtab.insert(id.lexeme());
+ * identifier tokens. The symbol table entry will be initialized from the
+ * data_object_record parameter. */
+void parser::add_data_object_to_symtab (const token& id, const data_object_record& record) {
+    auto result = m_symtab.insert(id.lexeme(), record);
 
     if (false == result.second) {
         m_good = false;
         semantic_error(id.lineno(), "redeclaration of '%s'\n", id.lexeme().c_str());
-
-        /* We don't want to modify the current record--just bail. */
-        return;
     }
-
-    /* result is a std::pair:
-     *  (iterator, bool)
-     * where iterator "points" to a std::pair:
-     *  (key, value)
-     * where key is the (scope_id, lexeme) key and value is the
-     * data_object_record that we actually care about. */
-    auto& record = result.first->second;
-
-    record = make_data_object_on_stack(keyword_to_type(type.lexeme()), is_constant);
-}
-
-/* Convenience function to add a constant data object to the symbol table. */
-void parser::add_constant_data_object (const token& type, const token& id) {
-    add_data_object(type, id, true);
 }
 
 /* Check to make sure that an identifier exists in the symbol table. Does not
@@ -221,7 +204,7 @@ void parser::get_referenced_data_object (const token& id, data_object_record& ex
 }
 
 /* Create a data_object_record that represents an object on the stack. */
-data_object_record parser::make_data_object_on_stack (bada_type type, bool is_constant = false) {
+data_object_record parser::make_data_object_on_stack (bada_type type, bool is_constant) {
     data_object_record rec;
 
     rec.is_constant = is_constant;
@@ -325,6 +308,118 @@ void parser::codegen (std::string instr, std::string arg1, std::string arg2, std
     }
 }
 
+void parser::codegen_op (const token& op,
+        data_object_record dest,
+        data_object_record lhs,
+        data_object_record rhs) {
+    bool type_op_mismatch = false;
+
+    if (bada_type::integer == dest.type) {
+        codegen("lw", "$t0", std::to_string(lhs.location) + "($fp)");
+        codegen("lw", "$t1", std::to_string(rhs.location) + "($fp)");
+
+        if (!op.lexeme().compare(ADDOP_ADD)) {
+            codegen("add", "$t0", "$t0", "$t1");
+        }
+        else if (!op.lexeme().compare(ADDOP_SUBTRACT)) {
+            codegen("sub", "$t0", "$t0", "$t1");
+        }
+        else if (!op.lexeme().compare(MULOP_MULTIPLY)) {
+            codegen("mul", "$t0", "$t0", "$t1");
+        }
+        else if (!op.lexeme().compare(MULOP_DIVIDE)) {
+            codegen("div", "$t0", "$t0", "$t1");
+        }
+        else if (!op.lexeme().compare(MULOP_MOD)) {
+            codegen("rem", "$t0", "$t0", "$t1");
+        }
+        else if (!op.lexeme().compare(RELOP_LT)) {
+            codegen("slt", "$t0", "$t0", "$t1");
+        }
+        else if (!op.lexeme().compare(RELOP_GT)) {
+            codegen("sgt", "$t0", "$t0", "$t1");
+        }
+        else if (!op.lexeme().compare(RELOP_EQ)) {
+            codegen("seq", "$t0", "$t0", "$t1");
+        }
+        else {
+            type_op_mismatch = true;
+        }
+
+        codegen("sw", "$t0", std::to_string(dest.location) + "($fp)");
+    }
+    else if (bada_type::boolean == dest.type) {
+        codegen("lw", "$t0", std::to_string(lhs.location) + "($fp)");
+        codegen("lw", "$t1", std::to_string(rhs.location) + "($fp)");
+
+        if (!op.lexeme().compare(ADDOP_OR)) {
+            codegen("or", "$t0", "$t0", "$t1");
+        }
+        else if (!op.lexeme().compare(MULOP_AND)) {
+            codegen("and", "$t0", "$t0", "$t1");
+        }
+        else if (!op.lexeme().compare(RELOP_LT)) {
+            codegen("slt", "$t0", "$t0", "$t1");
+        }
+        else if (!op.lexeme().compare(RELOP_GT)) {
+            codegen("sgt", "$t0", "$t0", "$t1");
+        }
+        else if (!op.lexeme().compare(RELOP_EQ)) {
+            codegen("seq", "$t0", "$t0", "$t1");
+        }
+        else {
+            type_op_mismatch = true;
+        }
+
+        codegen("sw", "$t0", std::to_string(dest.location) + "($fp)");
+    }
+    else if (bada_type::real == dest.type) {
+        /* TODO implement */
+        assert(false);
+        {
+            type_op_mismatch = true;
+        }
+    }
+    else {
+        /* never reached */
+        assert(false);
+    }
+
+    if (type_op_mismatch) {
+        semantic_error(op.lineno(), "operator %s used with incompatible type", op.lexeme().c_str());
+        m_good = false;
+    }
+}
+
+void parser::initialize_data_object (const data_object_record& record, const token& lit) {
+    if (bada_type::integer == record.type) {
+        codegen("li", "$t0", lit.lexeme().c_str());
+        codegen("sw", "$t0", std::to_string(record.location) + "($fp)");
+    }
+    else if (bada_type::boolean == record.type) {
+        if (!lit.lexeme().compare(KWD_TRUE)) {
+            codegen("li", "$t0", "1");
+        }
+        else if (!lit.lexeme().compare(KWD_FALSE)) {
+            codegen("li", "$t0", "0");
+        }
+        else {
+            /* never reached */
+            assert(false);
+        }
+
+        codegen("sw", "$t0", std::to_string(record.location) + "($fp)");
+    }
+    else if (bada_type::real == record.type) {
+        /* TODO implement */
+        assert(false);
+    }
+    else {
+        /* never reached */
+        assert(false);
+    }
+}
+  
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -406,7 +501,8 @@ void parser::rest (const token& declared_id) {
         match(token::type);
         match(token::semicolon);
 
-        add_data_object(declared_type, declared_id);
+        auto record = make_data_object_on_stack(keyword_to_type(declared_type.lexeme()));
+        add_data_object_to_symtab(declared_id, record);
     }
     else if (predict(token::constant)) {
         PRINTRULE(rest_constant);
@@ -418,10 +514,16 @@ void parser::rest (const token& declared_id) {
 
         match(token::type);
         match(token::assign);
+
+        /* Save the literal token so we can load it into memory. */
+        auto lit = m_token;
+
         match(token::literal);
         match(token::semicolon);
 
-        add_constant_data_object(declared_type, declared_id);
+        auto record = make_constant_data_object_on_stack(keyword_to_type(declared_type.lexeme()));
+        add_data_object_to_symtab(declared_id, record);
+        initialize_data_object(record, lit);
     }
     else {
         syntax_error(m_token.lineno(), "expected token (%d | %d), got token %d\n",
@@ -477,6 +579,11 @@ void parser::assignstat () {
 
     if (lhs.type != rhs.type) {
         semantic_error(lineno, "type mismatch\n");
+        m_good = false;
+    }
+    
+    if (lhs.is_constant) {
+        semantic_error(lineno, "assignment to constant\n");
         m_good = false;
     }
 
@@ -672,7 +779,7 @@ void parser::expprime (data_object_record& exprec) {
         PRINTRULE(expprime);
 
         /* Save the expression record of the left hand side of the op. */
-        data_object_record lhs = exprec;
+        auto lhs = exprec;
 
         /* Save the operation to perform. */
         token operation = m_token;
@@ -680,16 +787,17 @@ void parser::expprime (data_object_record& exprec) {
         match(token::addop);
         term(exprec);
 
-        /* TODO generate code -- make a temporary with lhs and exprec, update
-         * exprec to point to this temporary, pass to expprime. */
-
-        if (exprec.type != lhs.type) {
-            /* XXX left off here */
+        auto rhs = exprec;
+        if (rhs.type != lhs.type) {
+            semantic_error(operation.lineno(), "add-expression uses incompatible types");
             m_good = false;
         }
 
-        exprec = make_data_object_on_stack(exprec.type, 
+        exprec = make_data_object_on_stack(exprec.type);
 
+        /* exprec is now the destination of the result of an add operation
+         * on lhs and rhs. */
+        codegen_op(operation, exprec, lhs, rhs);
 
         expprime(exprec);
     }
@@ -712,7 +820,7 @@ void parser::termprime (data_object_record& exprec) {
         PRINTRULE(termprime);
 
         /* Save the expression record of the left hand side of the op. */
-        data_object_record lhs = exprec;
+        auto lhs = exprec;
 
         /* Save the operation to perform. */
         token operation = m_token;
@@ -720,7 +828,15 @@ void parser::termprime (data_object_record& exprec) {
         match(token::mulop);
         relfactor(exprec);
 
-        /* TODO generate code */
+        auto rhs = exprec;
+        if (rhs.type != lhs.type) {
+            semantic_error(operation.lineno(), "mul-expression uses incompatible types");
+            m_good = false;
+        }
+
+        exprec = make_data_object_on_stack(exprec.type);
+
+        codegen_op(operation, exprec, lhs, rhs);
 
         termprime(lhs);
     }
@@ -751,7 +867,15 @@ void parser::factorprime (data_object_record& exprec) {
         match(token::relop);
         factor(exprec);
 
-        /* TODO generate code */
+        auto rhs = exprec;
+        if (rhs.type != lhs.type) {
+            semantic_error(operation.lineno(), "rel-expression uses incompatible types");
+            m_good = false;
+        }
+
+        exprec = make_data_object_on_stack(exprec.type);
+
+        codegen_op(operation, exprec, lhs, rhs);
     }
     else {
         PRINTRULE(factorprime_null);
@@ -763,10 +887,22 @@ void parser::factor (data_object_record& exprec) {
     if (predict(token::not_)) {
         PRINTRULE(factor_not);
 
+        int lineno = m_token.lineno();
+
         match(token::not_);
         factor(exprec);
 
-        /* TODO generate code */
+        auto operand = exprec;
+        if (bada_type::boolean != operand.type) {
+            semantic_error(lineno, "operator not applied to non-boolean");
+            m_good = false;
+        }
+
+        exprec = make_data_object_on_stack(exprec.type);
+
+        codegen("lw", "$t0", std::to_string(operand.location) + "($fp)");
+        codegen("not", "$t0", "$t0");
+        codegen("sw", "$t0", std::to_string(exprec.location) + "($fp)");
     }
     else if (predict(token::identifier)) {
         PRINTRULE(factor_id);
@@ -781,8 +917,7 @@ void parser::factor (data_object_record& exprec) {
 
         /* Allocate a place on the stack for this literal value. */
         exprec = make_constant_data_object_on_stack(literal_to_type(lit.lexeme()));
-
-        /* TODO generate code */
+        initialize_data_object(exprec, lit);
     }
     else if (predict(token::lparen)) {
         PRINTRULE(factor_express);
