@@ -124,9 +124,9 @@ private:
     /* Generate code to initialize a Baby Ada data object. */
     void codegen_initialize_data_object (const data_object_record& record, const token& lit);
 
-    /* Generate a unique MIPS label for a string literal. */
-    std::string next_string_label () {
-        return std::string("_string_") + std::to_string(m_next_string_label++);
+    /* Generate a unique MIPS label for a section of data. */
+    std::string next_data_label () {
+        return std::string("_data_") + std::to_string(m_next_string_label++);
     }
 
     /* Generate a unique MIPS label for a section of code. */

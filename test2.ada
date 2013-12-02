@@ -80,4 +80,14 @@ procedure prog is
 		put("Your number was: ");
 		put_line(c);
 	end if;
+
+	declare i : integer; begin
+		put_line("counting down");
+		i := 0;
+		while c > 0 and i < 5 loop 
+			c := c - 1;
+			i := i + 1;
+			put_line(c);
+		end loop;
+	end;
 end prog;
