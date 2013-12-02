@@ -122,11 +122,16 @@ private:
     void codegen_op (const token& tok, data_object_record dest, data_object_record lhs, data_object_record rhs);
 
     /* Generate code to initialize a Baby Ada data object. */
-    void initialize_data_object (const data_object_record& record, const token& lit);
+    void codegen_initialize_data_object (const data_object_record& record, const token& lit);
 
     /* Generate a unique MIPS label for a string literal. */
     std::string next_string_label () {
         return std::string("_string_") + std::to_string(m_next_string_label++);
+    }
+
+    /* Generate a unique MIPS label for a section of code. */
+    std::string next_code_label () {
+        return std::string("_code_") + std::to_string(m_next_code_label++);
     }
 
     //////////////////////////////////////////////////////////////////////////
@@ -141,9 +146,14 @@ private:
     location_type m_next_location = 0;
 
     int m_next_string_label = 0;
+    int m_next_code_label = 0;
 
     /* This flag is set to false if an error occurs. */
     bool m_good = true;
+
+    /* True after "true" and "false" .asciiz MIPS directives have been
+     * generated. */
+    bool m_have_boolean_string_literals = false;
 };
 
 #endif
