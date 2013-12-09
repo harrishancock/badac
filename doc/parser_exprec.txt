@@ -1,0 +1,124 @@
+California State University East Bay
+CS4110 - Compiler Design
+Author: Harris Hancock (hhancock 'at' horizon)
+
+Baby Ada Compiler Assignment (26 November 2013)
+
+
+
+At this point, I have reading and writing of integers, writing strings, and
+very simple assignment (identifer-to-identifier) implemented and working. Some
+of the infrastructure for arithmetic is in place, but not completed.
+
+
+
+== TEST RUN ==
+
+
+BABY ADA SOURCE CODE
+
+harris@hlidarendi:~/projects/CS4110/badac$ cat test2.ada 
+-- A program to test reading and writing of integers, writing strings, and
+-- simple variable-to-variable assignment.
+procedure prog is
+	myFave : integer;
+	yourFave : integer;
+	begin
+
+	put("Hi. What's your favorite integer?\n> ");
+	get(yourFave);
+
+	myFave := yourFave;
+
+	put("What a coincidence! My favorite's ");
+	put(myFave);
+	put_line(", as well!");
+end prog;
+
+
+COMPILATION
+
+harris@hlidarendi:~/projects/CS4110/badac$ ./test_parser test2.ada
+Translating from test2.ada to out.s
+1 4 6 7 4 6 7 5 2 12 18 23 2 11 17 38 2 9 15 38 25 28 31 35 38 33 30 27 2 12 18 23 2 12 18 24 25 28 31 35 38 33 30 27 2 12 18 23 3 
+Program is syntactically correct
+Program accepted!
+================================ SYMBOL TABLE ================================
+Scope 0:
+	myFave: is_constant<0>, type<0>, location<0>
+	yourFave: is_constant<0>, type<0>, location<-4>
+
+
+GENERATED MIPS ASSEMBLY CODE
+
+harris@hlidarendi:~/projects/CS4110/badac$ cat out.s
+# Begin preamble
+.text
+.globl main
+main:
+	move	$fp,$sp
+	la	$a0,ProgStart
+	li	$v0,4
+	syscall
+# Begin translated code
+	# writeexp -- write a string literal
+.data
+_string_0:	.asciiz	"Hi. What's your favorite integer?\n> "
+.text
+	la	$a0,_string_0
+	li	$v0,4
+	syscall
+	# readstat -- read an integer
+	li	$v0,5
+	syscall
+	sw	$v0,-4($fp)
+	# assignstat
+	lw	$t0,-4($fp)
+	sw	$t0,0($fp)
+	# writeexp -- write a string literal
+.data
+_string_1:	.asciiz	"What a coincidence! My favorite's "
+.text
+	la	$a0,_string_1
+	li	$v0,4
+	syscall
+	# writeexp -- write an integer literal
+	lw	$a0,0($fp)
+	li	$v0,1
+	syscall
+	# writeexp -- write a string literal
+.data
+_string_2:	.asciiz	", as well!"
+.text
+	la	$a0,_string_2
+	li	$v0,4
+	syscall
+	# writestat -- print newline
+	li	$a0,0x0a
+	li	$v0,11
+	syscall
+# Begin postamble
+	la	$a0,ProgEnd
+	li	$v0,4
+	syscall
+	li	$v0,10
+	syscall
+.data
+ProgStart:	.asciiz	"Program Start\n"
+ProgEnd:	.asciiz	"Program End\n"
+
+
+EXECUTION IN SPIM
+
+harris@hlidarendi:~/projects/CS4110/badac$ spim -file out.s
+SPIM Version 8.0 of January 8, 2010
+Copyright 1990-2010, James R. Larus.
+All Rights Reserved.
+See the file README for a full copyright notice.
+Loaded: /usr/lib/spim/exceptions.s
+Program Start
+Hi. What's your favorite integer?
+> 2708
+What a coincidence! My favorite's 2708, as well!
+Program End
+

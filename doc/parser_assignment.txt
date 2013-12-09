@@ -1,0 +1,166 @@
+California State University East Bay
+CS4110 - Compiler Design
+Author: Harris Hancock (hhancock 'at' horizon)
+
+Baby Ada Compiler Assignment (7 November 2013)
+
+
+
+What follows are some test runs for my Baby Ada parser. The code is attached.
+
+Since the scanner portion of the program is almost identical to the version I
+previously handed in, I have omitted its code listing to save paper. The only
+change from its previous iteration is this: boolean literals and numeric
+literals are now both scanned into a catchall "literal" token. I did this to
+reconcile my set of tokens with the set used by the Baby Ada BNF.
+
+
+
+== TEST RUNS ==
+
+For the following test runs, every production rule was assigned a number,
+starting from 1, increasing in the order in which the rules were written in
+the assigned Baby Ada BNF grammar.
+
+TEST RUN 1 - the smallest possible Ada program parsable by my parser
+
+harris@hlidarendi:~/projects/CS4110/badac$ cat test1.ada 
+-- Minimal Ada program
+procedure prog is begin end prog;
+
+harris@hlidarendi:~/projects/CS4110/badac$ ./test_parser test1.ada 
+1 5 3 
+Program accepted!
+
+
+
+TEST RUN 2 - the same program, with some declarations
+
+harris@hlidarendi:~/projects/CS4110/badac$ cat test2.ada 
+-- Minimal Ada program, with decls
+procedure prog is
+	a : constant integer := 123;
+        b : real;
+	begin
+end prog;
+
+harris@hlidarendi:~/projects/CS4110/badac$ ./test_parser test2.ada 
+1 4 6 8 4 6 7 5 3 
+Program accepted!
+
+
+
+TEST RUN 3 - Note: I have verified programmatically that every rule is
+represented here. Also, line breaks were added to the output of the parser
+for legibility.
+
+harris@hlidarendi:~/projects/CS4110/badac$ cat test3.ada 
+-- Baby Ada program, with decls and stats. This program forces the parser
+-- to execute every single production rule in the Baby Ada grammar.
+-- Note: this program is not actually supposed to be meaningful.
+procedure prog is
+	a : constant boolean := false;
+        b : real;
+begin
+	-- block statement
+	begin
+		-- assignment statement
+		b := 3.14159;
+	end;
+	-- block statement with decl
+	declare c : boolean; begin
+		-- if statement
+		if b > 0 then
+			-- read statement
+			get(c);
+		end if;
+	end;
+	-- loop statement
+	while not (b - 1 * a > 5) = true loop
+		-- write statements
+		put_line("Hello, world!");
+		put(a - 5 + b);
+	end loop;
+end prog;
+
+harris@hlidarendi:~/projects/CS4110/badac$ ./test_parser test3.ada 
+1 4 6 8 4 6 7 5 2 13 20 22 2 9 15 38 25 28 31 36 33 30 27 3 2 13 20 21 6 7 5 2
+10 16 25 28 31 35 38 32 36 30 27 2 11 17 38 3 3 2 14 19 25 28 31 34 37 25 28
+31 35 38 33 30 26 28 31 36 33 29 31 35 38 32 36 30 27 32 36 30 27 2 12 18 23 2
+12 18 24 25 28 31 35 38 33 30 26 28 31 36 33 30 26 28 31 35 38 33 30 27 3 3 
+Program accepted!
+
+
+
+== BAD TEST RUNS ==
+
+BAD TEST RUN 1 - note: token 0 == EOF
+
+-- Minimal Ada program, missing semicolon
+procedure prog is begin end prog
+
+harris@hlidarendi:~/projects/CS4110/badac$ ./test_parser bad1.ada 
+1 5 3 error: line 3: expected token 21, got token 0
+Aborted (core dumped)
+
+
+
+BAD TEST RUN 2 - note: token 1 == identifier
+
+harris@hlidarendi:~/projects/CS4110/badac$ cat bad2.ada 
+-- Minimal Ada program, with decls. Non-literal (hello) in assignment.
+procedure prog is
+	a : constant integer := hello;
+        b : real;
+	begin
+end prog;
+
+harris@hlidarendi:~/projects/CS4110/badac$ ./test_parser bad2.ada 
+1 4 6 8 error: line 3: expected token 2, got token 1
+Aborted (core dumped)
+
+
+
+BAD TEST RUN 3 - note: token 3 == string literal. Again, line breaks were
+added for legibility.
+
+harris@hlidarendi:~/projects/CS4110/badac$ cat bad3.ada 
+-- Baby Ada program, with decls and stats. This program forces the parser
+-- to execute every single production rule in the Baby Ada grammar.
+-- Extraneous string literal towards the end of the program.
+-- Note: this program is not actually supposed to be meaningful.
+procedure prog is
+	a : constant boolean := false;
+        b : real;
+begin
+	-- block statement
+	begin
+		-- assignment statement
+		b := 3.14159;
+	end;
+	-- block statement with decl
+	declare c : boolean; begin
+		-- if statement
+		if b > 0 then
+			-- read statement
+			get(c);
+		end if;
+	end;
+	-- loop statement
+	while not (b - 1 * a > 5) = true loop
+		-- write statements
+		put_line("Hello, world!");
+		put(a - 5 + b);
+	end loop;
+	"" -- !!! extraneous string literal
+end prog;
+
+
+harris@hlidarendi:~/projects/CS4110/badac$ ./test_parser bad3.ada 
+1 4 6 8 4 6 7 5 2 13 20 22 2 9 15 38 25 28 31 36 33 30 27 3 2 13 20 21 6 7 5 2
+10 16 25 28 31 35 38 32 36 30 27 2 11 17 38 3 3 2 14 19 25 28 31 34 37 25 28
+31 35 38 33 30 26 28 31 36 33 29 31 35 38 32 36 30 27 32 36 30 27 2 12 18 23 2
+12 18 24 25 28 31 35 38 33 30 26 28 31 36 33 30 26 28 31 35 38 33 30 27 3 3
+error: line 28: expected token 18, got token 3
+Aborted (core dumped)
+
