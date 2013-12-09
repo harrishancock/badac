@@ -46,4 +46,6 @@ int main (int argc, char** argv) {
     }
 
     p.display_symbol_table(std::cout);
+
+    return !p.good();
 }

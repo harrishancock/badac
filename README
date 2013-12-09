@@ -1,0 +1,25 @@
+== Harris' Baby Ada Compiler Installation Instructions ==
+
+First you'll need to build the compiler. The compiler uses CMake as a build
+system, so you'll need to have that installed. There are no other
+dependencies.
+
+[ in the badac root directory ]
+$ mkdir build
+$ cd build
+$ cmake ..
+
+If you wish to install to a different location than CMake's default (typically
+/usr/local, or some other system-dependent location), you'll want to replace
+that last command with
+
+$ cmake .. -DCMAKE_INSTALL_PREFIX=/path/to/install/to
+
+CMake will make some preparations and emit an appropriate build script. You
+are expected to know what to do with it; on Linux it should be as simple as:
+
+$ make
+$ make install
+
+Harris' Baby Ada Compiler is now installed. Refer to doc/manual.pdf for usage
+instructions.
