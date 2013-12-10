@@ -1,4 +1,4 @@
-== Harris' Baby Ada Compiler Installation Instructions ==
+== Harris' Baby Ada Compiler ==
 
 First you'll need to build the compiler. The compiler uses CMake as a build
 system, so you'll need to have that installed. There are no other
