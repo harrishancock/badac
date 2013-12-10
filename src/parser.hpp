@@ -16,6 +16,8 @@
 #include "scoped_symbol_table.hpp"
 #include "scanner.hpp"
 
+#include <cstdarg>
+
 #include <set>
 
 using first_set = std::set<token::token_id>;
@@ -48,9 +50,18 @@ public:
         m_symtab.display(output);
     }
 
-    /* Indicate whether or not the program passed semantic checking during the
-     * parse. */
-    bool good () const { return m_good; }
+    /* Indicate whether or not the program passed syntax and static semantic
+     * checking. */
+    bool good () const { return !m_errcode; }
+
+    enum error_code {
+        NO_ERROR = 0,
+        SYNTAX_ERROR,
+        STATIC_SEMANTIC_ERROR
+    };
+
+    /* Get detailed error code information. */
+    error_code errcode () const { return m_errcode; }
 
 private:
     /* Baby Ada nonterminals. */
@@ -78,7 +89,19 @@ private:
     void idnonterm (data_object_record&);
 
     //////////////////////////////////////////////////////////////////////////
+
+    /* Emit an error message. fmt must be a printf-compatible format string
+     * suitable for use with the rest of the arguments passed. */
+    void emit_error (int lineno, const char* fmt, va_list ap);
     
+    /* Emit a syntax error and abort. fmt has the same constraints as for
+     * emit_error(). */
+    void syntax_error (int lineno, const char* fmt, ...);
+
+    /* Emit a static semantic error and continue. fmt has the same constraints as for
+     * emit_error(). */
+    void static_semantic_error (int lineno, const char* fmt, ...);
+
     /* match and predict are the two primary operations the parser uses to
      * work its way through the token stream. */
     void match (const token::token_id);
@@ -102,7 +125,12 @@ private:
 
     //////////////////////////////////////////////////////////////////////////
 
-    /* Generate the MIPS program start/end boilerplate. */
+    /* Generate the MIPS program start/end boilerplate.
+     * A comment on an earlier iteration of this code asked if "postamble" is
+     * a word. While few dictionaries define it, I find that it is a fairly
+     * common word in a computing context; moreover, preamble/postamble was the
+     * word pair used in the textbook for CS 2430 in the context of function
+     * calls in MIPS, so it seemed a natural choice here. */
     void codegen_preamble ();
     void codegen_postamble ();
 
@@ -149,7 +177,7 @@ private:
     int m_next_code_label = 0;
 
     /* This flag is set to false if an error occurs. */
-    bool m_good = true;
+    error_code m_errcode = NO_ERROR;
 
     /* True after "true" and "false" .asciiz MIPS directives have been
      * generated. */

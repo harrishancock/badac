@@ -25,8 +25,10 @@ add_test(AssignToConstantReal badac ${TESTDIR}/AssignToConstantReal.ada)
 add_test(ReadToConstantBoolean badac ${TESTDIR}/ReadToConstantBoolean.ada)
 add_test(ReadToConstantInteger badac ${TESTDIR}/ReadToConstantInteger.ada)
 add_test(ReadToConstantReal badac ${TESTDIR}/ReadToConstantReal.ada)
-add_test(ConstantDeclarationWithoutAssignment badac ${TESTDIR}/ConstantDeclarationWithoutAssignment.ada)
-add_test(NonConstantDeclarationWithAssignment badac ${TESTDIR}/NonConstantDeclarationWithAssignment.ada)
+add_test(ConstantDeclarationWithoutAssignment
+    badac ${TESTDIR}/ConstantDeclarationWithoutAssignment.ada)
+add_test(NonConstantDeclarationWithAssignment
+    badac ${TESTDIR}/NonConstantDeclarationWithAssignment.ada)
 add_test(NonBooleanIfCondition badac ${TESTDIR}/NonBooleanIfCondition.ada)
 add_test(NonBooleanWhileCondition badac ${TESTDIR}/NonBooleanWhileCondition.ada)
 add_test(ProgramIdentifierMismatch badac ${TESTDIR}/ProgramIdentifierMismatch.ada)
@@ -36,6 +38,7 @@ add_test(TypeMismatchRelOp badac ${TESTDIR}/TypeMismatchRelOp.ada)
 add_test(TypeMismatchNot badac ${TESTDIR}/TypeMismatchNot.ada)
 add_test(TypeMismatchAssignment badac ${TESTDIR}/TypeMismatchAssignment.ada)
 
+# All of the following tests are expected to fail.
 set_tests_properties(
     AssignToConstantBoolean
     AssignToConstantInteger

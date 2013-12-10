@@ -105,7 +105,7 @@ first_set express {
 
 /* Emit an error message. fmt must be a printf-compatible format string
  * suitable for use with the rest of the arguments passed. */
-void emit_error (int lineno, const char* fmt, va_list ap) {
+void parser::emit_error (int lineno, const char* fmt, va_list ap) {
     /* For now, compiler output is a bit of a mess, since we're printing the
      * leftmost derivation interleaved with errors. A leading newline will
      * help readability until I can clean up the output. */
@@ -113,23 +113,30 @@ void emit_error (int lineno, const char* fmt, va_list ap) {
     vfprintf(stderr, fmt, ap);
 }
 
-/* Emit a syntax error and abort. fmt has the same constraints as for
- * emit_error(). */
-void syntax_error (int lineno, const char* fmt, ...) {
-    va_list ap;
-    va_start(ap, fmt);
-    emit_error(lineno, fmt, ap);
-    va_end(ap);
-    abort();
+/* Emit a syntax error and continue. fmt has the same constraints as for
+ * emit_error(). Since this parser does not currently support any attempt to
+ * resynchronize with the input token stream, this function is a no-op on all
+ * subsequent calls to prevent spamming the console. */
+void parser::syntax_error (int lineno, const char* fmt, ...) {
+    if (SYNTAX_ERROR != errcode()) {
+        va_list ap;
+        va_start(ap, fmt);
+        emit_error(lineno, fmt, ap);
+        va_end(ap);
+
+        m_errcode = SYNTAX_ERROR;
+    }
 }
 
 /* Emit a semantic error and continue. fmt has the same constraints as for
  * emit_error(). */
-void semantic_error (int lineno, const char* fmt, ...) {
+void parser::static_semantic_error (int lineno, const char* fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
     emit_error(lineno, fmt, ap);
     va_end(ap);
+
+    m_errcode = STATIC_SEMANTIC_ERROR;
 }
 
 
@@ -182,8 +189,7 @@ void parser::add_data_object_to_symtab (const token& id, const data_object_recor
     auto result = m_symtab.insert(id.lexeme(), record);
 
     if (false == result.second) {
-        m_good = false;
-        semantic_error(id.lineno(), "redeclaration of '%s'\n", id.lexeme().c_str());
+        static_semantic_error(id.lineno(), "redeclaration of '%s'\n", id.lexeme().c_str());
     }
 }
 
@@ -193,8 +199,7 @@ void parser::get_referenced_data_object (const token& id, data_object_record& ex
     auto it = m_symtab.find_in_active_scopes(id.lexeme());
 
     if (m_symtab.end() == it) {
-        m_good = false;
-        semantic_error(id.lineno(), "use of undeclared identifier '%s'\n",
+        static_semantic_error(id.lineno(), "use of undeclared identifier '%s'\n",
                 id.lexeme().c_str());
     }
     else {
@@ -314,8 +319,6 @@ void parser::codegen_op (const token& op,
         data_object_record rhs) {
     bool type_op_mismatch = false;
 
-    assert(lhs.type == rhs.type);
-
     if (bada_type::integer == lhs.type) {
         codegen("lw", "$t0", std::to_string(lhs.location) + "($fp)");
         codegen("lw", "$t1", std::to_string(rhs.location) + "($fp)");
@@ -381,30 +384,47 @@ void parser::codegen_op (const token& op,
 
         if (!op.lexeme().compare(ADDOP_ADD)) {
             codegen("add.s", "$f0", "$f0", "$f2");
+            codegen("s.s", "$f0", std::to_string(dest.location) + "($fp)");
         }
         else if (!op.lexeme().compare(ADDOP_SUBTRACT)) {
             codegen("sub.s", "$f0", "$f0", "$f2");
+            codegen("s.s", "$f0", std::to_string(dest.location) + "($fp)");
         }
         else if (!op.lexeme().compare(MULOP_MULTIPLY)) {
             codegen("mul.s", "$f0", "$f0", "$f2");
+            codegen("s.s", "$f0", std::to_string(dest.location) + "($fp)");
         }
         else if (!op.lexeme().compare(MULOP_DIVIDE)) {
             codegen("div.s", "$f0", "$f0", "$f2");
+            codegen("s.s", "$f0", std::to_string(dest.location) + "($fp)");
         }
         else if (!op.lexeme().compare(RELOP_LT)) {
-            codegen("c.lt.s", "$f0", "$f0", "$f2");
+            codegen("c.lt.s", "$f0", "$f2");
+            codegen("# move floating-point control/condition register into t0");
+            codegen("# and mask out the condition bit");
+            codegen("cfc1", "$t0", "$25");
+            codegen("andi", "$t0", "1");
+            codegen("sw", "$t0", std::to_string(dest.location) + "($fp)");
         }
         else if (!op.lexeme().compare(RELOP_GT)) {
-            codegen("c.lt.s", "$f0", "$f2", "$f0");
+            codegen("c.lt.s", "$f2", "$f0");
+            codegen("# move floating-point control/condition register into t0");
+            codegen("# and mask out the condition bit");
+            codegen("cfc1", "$t0", "$25");
+            codegen("andi", "$t0", "1");
+            codegen("sw", "$t0", std::to_string(dest.location) + "($fp)");
         }
         else if (!op.lexeme().compare(RELOP_EQ)) {
-            codegen("c.eq.s", "$f0", "$f0", "$f2");
+            codegen("c.eq.s", "$f0", "$f2");
+            codegen("# move floating-point control/condition register into t0");
+            codegen("# and mask out the condition bit");
+            codegen("cfc1", "$t0", "$25");
+            codegen("andi", "$t0", "1");
+            codegen("sw", "$t0", std::to_string(dest.location) + "($fp)");
         }
         else {
             type_op_mismatch = true;
         }
-
-        codegen("s.s", "$f0", std::to_string(dest.location) + "($fp)");
     }
     else {
         /* never reached */
@@ -412,8 +432,8 @@ void parser::codegen_op (const token& op,
     }
 
     if (type_op_mismatch) {
-        semantic_error(op.lineno(), "operator %s used with incompatible type", op.lexeme().c_str());
-        m_good = false;
+        static_semantic_error(op.lineno(),
+                "operator %s used with incompatible type\n", op.lexeme().c_str());
     }
 }
 
@@ -437,6 +457,7 @@ void parser::codegen_initialize_data_object (const data_object_record& record, c
         codegen("sw", "$t0", std::to_string(record.location) + "($fp)");
     }
     else if (bada_type::real == record.type) {
+#if 0
         auto fp_immediate = next_data_label();
 
         /* Easiest way to load a floating point immediate value is to define
@@ -446,6 +467,10 @@ void parser::codegen_initialize_data_object (const data_object_record& record, c
         codegen_raw(fp_immediate + ':', ".float", lit.lexeme().c_str());
         codegen_raw(".text");
         codegen("l.s", "$f0", fp_immediate);
+        codegen("s.s", "$f0", std::to_string(record.location) + "($fp)");
+#endif
+
+        codegen("li.s", "$f0", lit.lexeme().c_str());
         codegen("s.s", "$f0", std::to_string(record.location) + "($fp)");
     }
     else {
@@ -470,18 +495,28 @@ void parser::program () {
     m_symtab.open_scope();
 
     match(token::procedure);
-    /* Note that I'm in CS4110, so I'm not worrying about procedures, and not
-     * putting this identifier into my symbol table (at least not yet). */
+
+    auto program_id_begin = m_token;
+
     match(token::identifier);
     match(token::is);
     decls();
     match(token::begin);
     stats();
     match(token::end);
+
+    auto program_id_end = m_token;
+
     match(token::identifier);
     match(token::semicolon);
 
     m_symtab.close_scope();
+
+    if (program_id_begin.lexeme().compare(program_id_end.lexeme())) {
+        static_semantic_error(program_id_end.lineno(),
+                "program identifier mismatch: %s != %s\n",
+                program_id_end.lexeme().c_str(), program_id_begin.lexeme().c_str());
+    }
 }
 
 /* stats ::= statmt stats | <empty> */
@@ -613,13 +648,11 @@ void parser::assignstat () {
     match(token::semicolon);
 
     if (lhs.type != rhs.type) {
-        semantic_error(lineno, "type mismatch\n");
-        m_good = false;
+        static_semantic_error(lineno, "type mismatch\n");
     }
     
     if (lhs.is_constant) {
-        semantic_error(lineno, "assignment to constant\n");
-        m_good = false;
+        static_semantic_error(lineno, "assignment to constant\n");
     }
 
     /* Copy the object from the right-hand-side to the left-hand-side. */
@@ -651,8 +684,7 @@ void parser::ifstat () {
     express(cond);
 
     if (bada_type::boolean != cond.type) {
-        semantic_error(lineno, "non-boolean if statement condition");
-        m_good = false;
+        static_semantic_error(lineno, "non-boolean if statement condition\n");
     }
 
     /* Skip the code generated by stats() if cond is false. */
@@ -683,6 +715,10 @@ void parser::readstat () {
     match(token::rparen);
     match(token::semicolon);
 
+    if (exprec.is_constant) {
+        static_semantic_error(lineno, "read to constant\n");
+    }
+
     if (bada_type::integer == exprec.type) {
         /* Read an integer. */
         codegen("# readstat -- read an integer");
@@ -702,8 +738,7 @@ void parser::readstat () {
         codegen("s.s", "$f0", std::to_string(exprec.location) + "($fp)");
     }
     else {
-        semantic_error(lineno, "read statement argument has incompatible type");
-        m_good = false;
+        static_semantic_error(lineno, "read statement with incompatible type\n");
     }
 }
 
@@ -743,8 +778,7 @@ void parser::loopst () {
     express(cond);
 
     if (bada_type::boolean != cond.type) {
-        semantic_error(lineno, "non-boolean while condition");
-        m_good = false;
+        static_semantic_error(lineno, "non-boolean while condition\n");
     }
 
     codegen("lw", "$t0", std::to_string(cond.location) + "($fp)");
@@ -896,8 +930,7 @@ void parser::expprime (data_object_record& exprec) {
 
         auto rhs = exprec;
         if (rhs.type != lhs.type) {
-            semantic_error(operation.lineno(), "add-expression uses incompatible types");
-            m_good = false;
+            static_semantic_error(operation.lineno(), "add-expression uses incompatible types\n");
         }
 
         exprec = make_data_object_on_stack(exprec.type);
@@ -937,8 +970,7 @@ void parser::termprime (data_object_record& exprec) {
 
         auto rhs = exprec;
         if (rhs.type != lhs.type) {
-            semantic_error(operation.lineno(), "mul-expression uses incompatible types");
-            m_good = false;
+            static_semantic_error(operation.lineno(), "mul-expression uses incompatible types\n");
         }
 
         exprec = make_data_object_on_stack(exprec.type);
@@ -976,8 +1008,7 @@ void parser::factorprime (data_object_record& exprec) {
 
         auto rhs = exprec;
         if (rhs.type != lhs.type) {
-            semantic_error(operation.lineno(), "rel-expression uses incompatible types");
-            m_good = false;
+            static_semantic_error(operation.lineno(), "rel-expression uses incompatible types\n");
         }
 
         /* The result of a relop is always a boolean, regardless of operand
@@ -1003,8 +1034,7 @@ void parser::factor (data_object_record& exprec) {
 
         auto operand = exprec;
         if (bada_type::boolean != operand.type) {
-            semantic_error(lineno, "operator not applied to non-boolean");
-            m_good = false;
+            static_semantic_error(lineno, "operator not applied to non-boolean\n");
         }
 
         exprec = make_data_object_on_stack(exprec.type);
