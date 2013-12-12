@@ -1,6 +1,7 @@
 # Harris' Baby Ada Compiler CMake build script
 
 cmake_minimum_required(VERSION 2.8)
+project(BADAC)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 
@@ -11,6 +12,7 @@ set(SRCS src/bada.cpp src/parser.cpp src/scanner.cpp src/main.cpp)
 
 add_executable(badac ${SRCS})
 install(TARGETS badac RUNTIME DESTINATION bin)
+install_files(${BADAC_SOURCE_DIR}/doc/man DESTINATION share)
 
 ##############################################################################
 # Testing
@@ -19,6 +21,7 @@ enable_testing()
 
 set(TESTDIR ${CMAKE_SOURCE_DIR}/tests)
 
+# Tests which are expected to fail.
 add_test(AssignToConstantBoolean badac ${TESTDIR}/AssignToConstantBoolean.ada)
 add_test(AssignToConstantInteger badac ${TESTDIR}/AssignToConstantInteger.ada)
 add_test(AssignToConstantReal badac ${TESTDIR}/AssignToConstantReal.ada)
@@ -37,6 +40,10 @@ add_test(TypeMismatchMulOp badac ${TESTDIR}/TypeMismatchMulOp.ada)
 add_test(TypeMismatchRelOp badac ${TESTDIR}/TypeMismatchRelOp.ada)
 add_test(TypeMismatchNot badac ${TESTDIR}/TypeMismatchNot.ada)
 add_test(TypeMismatchAssignment badac ${TESTDIR}/TypeMismatchAssignment.ada)
+add_test(ExtraneousTrailingTokens badac ${TESTDIR}/ExtraneousTrailingTokens.ada)
+
+# Tests which are expected to pass.
+add_test(BooleanRelOp badac ${TESTDIR}/BooleanRelOp.ada)
 
 # All of the following tests are expected to fail.
 set_tests_properties(
@@ -56,4 +63,5 @@ set_tests_properties(
     TypeMismatchRelOp
     TypeMismatchNot
     TypeMismatchAssignment
+    ExtraneousTrailingTokens
     PROPERTIES WILL_FAIL TRUE)
