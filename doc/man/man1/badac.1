@@ -1,0 +1,128 @@
+.\"
+.\" California State University East Bay
+.\" CS4110 - Compiler Design
+.\" Author: Harris Hancock (hhancock 'at' horizon)
+.\" 
+.\" Baby Ada Compiler Assignment (12 December 2013)
+.\" 
+
+.TH badac 1 "13 December 2013" "CS 4110" "CSU East Bay"
+
+.SH NAME
+badac \- Harris' Baby Ada compiler
+
+.SH SYNOPSIS
+badac \fIinfile\fR
+.P
+There are no options; translated output is written to \fBout.s\fR.
+
+.SH DESCRIPTION
+Harris' Baby Ada compiler translates Baby Ada source code to MIPS assembly
+language suitable for execution in a simulator such as SPIM. It does not
+generate object code directly.
+.P
+Baby Ada is a vastly stripped down programming
+language styled after Ada syntax. Identifiers are case-insensitive, and must
+begin with an alphabetic character or an underscore, and thereafter consist of
+any sequence of alphanumeric or non-consecutive underscore characters. Integer
+literals must consist only of decimal digits. Real (floating-point) literals
+must consist of one or more leading decimal digits, a single period, and one
+or more trailing decimal digits. Boolean literals must use the keywords
+\fItrue\fR or \fIfalse\fR. String literals, used only in write statements,
+must be enclosed in double quotes.
+.P
+Baby Ada supports only 32-bit \fIinteger\fR, single-precision \fIreal\fR, and
+\fIboolean\fR data types. Boolean objects occupy 32-bit words. Real data types
+support addition (\fI+\fR), subtraction (\fI-\fR), multiplication (\fI*\fR),
+and division (\fI/\fR) operations; integer data types support all of these,
+plus modulo (\fImod\fR). Boolean data types support \fIand\fR, \fIor\fR, and
+\fInot\fR operations. All three data types support the relational operations
+less-than (\fI<\fR), greater-than (\fI>\fR), and equality (\fI=\fR). The
+assignment operator is \fI:=\fR, so there is no ambiguity with the equality
+relational operator.
+.P
+Baby Ada
+is statically-scoped, and very strongly typed \- no type conversion whatsoever
+is performed.
+.P
+Baby Ada supports limited I/O facilities. The programmer can read integers and
+reals (and ideally booleans; see BUGS) with the \fIget\fR statement, and can
+write integers, reals, booleans, string literals, and expressions with the
+\fIput\fR and \fIput_line\fR statements \- \fIput_line\fR prints an implicit
+newline character at the end of the output. I/O is limited to the console
+standard input and standard output.
+.P
+Control structures include \fIif\fR constructs and \fIwhile\fR loops only.
+There is no else case \- to simulate such a construct, simply use the
+\fInot\fR operator to invert a previous \fIif\fR condition.
+
+.SH EXAMPLE
+A trivial example Baby Ada program follows as a demonstration of syntax.
+.P
+.nf
+-- Comments begin with two dashes, end with a newline.
+procedure Program is
+-- Constants must be initialized, while variables must not be.
+pi : constant real := 3.14;
+diameter : real; begin
+    -- You can declare new variables with block scope like so:
+    declare radius : real; begin
+        put("Diameter of circle ? ");
+        get(diameter);
+
+        put("The circumference of your circle is ");
+        -- Expressions in write statements are fine.
+        put_line(diameter * pi);
+
+        -- No implicit type conversion is performed, even for literals.
+        -- "diameter / 2" would cause a static semantic error, because the
+        -- division operation is applied to a real and an integer.
+        radius := diameter / 2.0;
+        put("The radius of your circle is ");
+        put_line(radius);
+
+        if radius > 10 then
+            put_line("Wow, that's a really big circle!");
+        end if;
+        -- There is no else construct, but it can be simulated.
+        if not (radius > 10) then
+            put_line("A modest-sized circle you've got.");
+        end if;
+    end;
+
+    declare i : integer; begin
+        i := 10;
+        put_line("Counting down ...");
+        -- While loops are similar in syntax to if statements.
+        while not (i = 0) loop
+            i := i - 1;
+            put_line(i);
+        end loop;
+    end;
+end Program;
+.fi
+.P
+For more meaningful examples, see the \fIexamples/\fR directory in the
+\fBbadac\fR source tree.
+.P
+To compile and run a Baby Ada program in SPIM, execute the following commands.
+.P
+.nf
+$ badac myProgram.ada
+$ spim -file out.s
+.fi
+
+.SH BUGS
+The boolean data type is incompletely implemented. Specifically, it is not
+currently possible to read a boolean from the console. If \fBbadac\fR attempts
+to translate a source file containing such a statement, the compiler will
+terminate abnormally.
+.P
+In real Ada, the result of the modulo operation takes the same sign as the
+divisor. \fBbadac\fR implements the modulo operation using the MIPS \fIrem\fR
+instruction, which is implementation-defined. The SPIM implementation of this
+instruction appears to take the same sign as the dividend, similar to the
+C/C++ '%' operator.
+
+.SH SEE ALSO
+\fIspim\fR(1)
