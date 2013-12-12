@@ -21,5 +21,5 @@ are expected to know what to do with it; on Linux it should be as simple as:
 $ make
 $ make install
 
-Harris' Baby Ada Compiler is now installed. Refer to doc/manual.pdf for usage
-instructions.
+Harris' Baby Ada Compiler is now installed. Refer to doc/man/man1/badac.1 for
+usage instructions.
