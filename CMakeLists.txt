@@ -12,7 +12,7 @@ set(SRCS src/bada.cpp src/parser.cpp src/scanner.cpp src/main.cpp)
 
 add_executable(badac ${SRCS})
 install(TARGETS badac RUNTIME DESTINATION bin)
-install_files(${BADAC_SOURCE_DIR}/doc/man DESTINATION share)
+install(FILES ${BADAC_SOURCE_DIR}/doc/man/man1/badac.1 DESTINATION share/man/man1)
 
 ##############################################################################
 # Testing
